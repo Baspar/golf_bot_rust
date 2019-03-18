@@ -3,7 +3,7 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::{Zero,One};
 use std::env;
 
-fn read_input() -> (Vec<u32>, Vec<u32>){
+fn read_input() -> (Vec<u32>, Vec<u32>) {
     let mut middle_flag_seen = false;
     let mut shot_distances: Vec<u32> = vec![];
 
@@ -30,7 +30,7 @@ fn read_input() -> (Vec<u32>, Vec<u32>){
     return (distance_to_test, shot_distances);
 }
 
-fn to_polynom(distances: Vec<u32>) -> Vec<Complex<f64>> {
+fn to_samples(distances: Vec<u32>) -> Vec<Complex<f64>> {
     let max_distance = distances.iter().fold(0, |acc, distance| acc.max(*distance));
     let mut x = vec![Complex::zero(); (2 * max_distance + 1) as usize];
 
@@ -43,27 +43,30 @@ fn to_polynom(distances: Vec<u32>) -> Vec<Complex<f64>> {
     return x;
 }
 
+fn fft(mut input: Vec<Complex<f64>>, inverse: bool) -> Vec<Complex<f64>> {
+    let mut output: Vec<Complex<f64>> = input
+        .iter()
+        .map(|_| Complex::zero())
+        .collect();
+    let mut planner = FFTplanner::new(inverse);
+    let fft = planner.plan_fft(input.len());
+    fft.process(&mut input, &mut output);
+    output
+}
+
 fn main() {
-    let (distance_to_test,shot_distances) = read_input();
-    let mut samples = to_polynom(shot_distances);
-    let mut convolued_samples: Vec<Complex<f64>> = samples.iter().map(|_| Complex::zero()).collect();
+    let (
+        distance_to_test,
+        shot_distances
+    ) = read_input();
+    let mut samples = to_samples(shot_distances);
 
-    // FFT
-    let mut planner = FFTplanner::new(false);
-    let fft = planner.plan_fft(samples.len());
-    fft.process(&mut samples, &mut convolued_samples);
-
-    convolued_samples = convolued_samples.iter().map(|c| c * c).collect();
-
-    // IFFT
-    let mut i_planner = FFTplanner::new(true);
-    let i_fft = i_planner.plan_fft(samples.len());
-    i_fft.process(&mut convolued_samples, &mut samples);
-
-    // let is_reachable: Vec<bool> = sample
-    //     .iter()
-    //     .enumerate()
-    //     .collect();
+    samples = fft(samples, false);
+    samples = samples
+        .iter()
+        .map(|c| c * c)
+        .collect();
+    samples = fft(samples, true);
 
     println!("Can shoot at {:?}", samples
              .iter()
@@ -72,9 +75,5 @@ fn main() {
              .filter(|x| *x != -1)
              .collect::<Vec<i32>>());
 
-
-
-
-    // println!("{} shot distances", shot_distances.len());
     println!("{} distances to test", distance_to_test.len());
 }
