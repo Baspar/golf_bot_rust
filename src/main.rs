@@ -52,15 +52,32 @@ fn to_samples(distances: Vec<u32>) -> Vec<Complex<f64>> {
     return x;
 }
 
-fn rec_fft(input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>, step: u32, start: u32) {
+const PI: f64 = 3.1415926536;
+
+fn rec_fft(input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>, step: usize, size: usize, start: usize) {
     let len = input.len();
-    rec_fft(input, output, step * 2, start);
-    rec_fft(input, output, step * 2, start + 1);
+
+    if step > len { return }
+
+    if step == len {
+        output[start] = input[start];
+        return
+    }
+
+    rec_fft(input, output, step * 2, size / 2, start);
+    rec_fft(input, output, step * 2, size / 2, start + 1);
+
+    for i in 0..size/2 {
+        let even = input[i];
+        let odd = input[i + size/2];
+        output[i] = even + Complex::from_polar(&1., &(2. * PI * (i as f64) / (size as f64))) * odd;
+        output[i + size/2] = even + Complex::from_polar(&1., &(2. * PI * (i as f64 + size as f64 / 2. ) / (size as f64))) * odd;
+    }
 }
 
 fn custom_fft(input: &Vec<Complex<f64>>) -> Vec<Complex<f64>> {
     let mut output: Vec<Complex<f64>> = vec![Complex::zero(); input.len()];
-    rec_fft(input, &mut output, 1, 0);
+    rec_fft(input, &mut output, 1, input.len(), 0);
     return output;
     // let mut planner = FFTplanner::new(inverse);
     // let fft = planner.plan_fft(input.len());
@@ -89,6 +106,7 @@ fn main() {
     // samples = fft(samples, false);
     println!("{}", samples.len());
     custom_fft(&samples);
+    println!("{:?}", samples);
     return;
 //     samples = samples
 //         .iter()
