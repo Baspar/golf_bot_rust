@@ -31,7 +31,16 @@ fn read_input() -> (Vec<u32>, Vec<u32>) {
 
     return (distance_to_test, shot_distances);
 }
-fn print_shots(samples: Vec<Complex<f64>>) {
+fn print_successful_shots(samples: &Vec<Complex<f64>>, shots: &Vec<u32>) {
+    let successful_shots = shots
+        .iter()
+        .filter(|&x| samples[(*x as usize)].re > 0.5)
+        .map(|&x| x.to_string())
+        .collect::<Vec<String>>();
+
+    print!("{} shots are possible: {}", successful_shots.len(), successful_shots.join(", "));
+}
+fn print_possible_shot(samples: &Vec<Complex<f64>>) {
     println!("Can shoot at {:?}", samples
              .iter()
              .enumerate()
@@ -101,6 +110,7 @@ fn main() {
     println!("{} distances to test", distance_to_test.len());
 
     // FFT from lib
+    println!("\nFrom rustfft lib");
     let mut samples = to_samples(&shot_distances);
     samples = fft(samples, false);
     samples = samples
@@ -108,9 +118,11 @@ fn main() {
         .map(|c| c * c)
         .collect();
     samples = fft(samples, true);
-    print_shots(samples);
+    print_possible_shot(&samples);
+    print_successful_shots(&samples, &distance_to_test);
 
     // Custom FFT
+    println!("\nFrom custom fft");
     let mut custom_samples = to_samples(&shot_distances);
     custom_samples = custom_fft(custom_samples, false);
     custom_samples = custom_samples
@@ -118,5 +130,6 @@ fn main() {
         .map(|c| c * c)
         .collect();
     custom_samples = custom_fft(custom_samples, true);
-    print_shots(custom_samples);
+    print_possible_shot(&custom_samples);
+    print_successful_shots(&custom_samples, &distance_to_test);
 }
