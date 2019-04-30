@@ -2,7 +2,9 @@ use rustfft::FFTplanner;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::{Zero,One};
 use std::env;
+use std::f64::consts::PI;
 
+// I/O
 fn read_input() -> (Vec<u32>, Vec<u32>) {
     let mut middle_flag_seen = false;
     let mut shot_distances: Vec<u32> = vec![];
@@ -29,45 +31,58 @@ fn read_input() -> (Vec<u32>, Vec<u32>) {
 
     return (distance_to_test, shot_distances);
 }
+fn print_shots(samples: Vec<Complex<f64>>) {
+    println!("Can shoot at {:?}", samples
+             .iter()
+             .enumerate()
+             .map(|(i, x)| if x.re > 0.5 { i as i32 } else { -1 })
+             .filter(|x| *x != -1)
+             .collect::<Vec<i32>>());
+}
 
-fn to_samples(distances: Vec<u32>) -> Vec<Complex<f64>> {
-    let max_distance = distances.iter().fold(0, |acc, distance| acc.max(*distance));
-    let mut size = 2 * max_distance + 1;
-    size -= 1;
-    size |= size >> 1;
-    size |= size >> 2;
-    size |= size >> 4;
-    size |= size >> 8;
-    size |= size >> 16;
-    size += 1;
+// Pick samples
+fn to_samples(distances: &Vec<u32>) -> Vec<Complex<f64>> {
+    let max_distance = distances.iter().fold(0, |acc, &distance| acc.max(distance));
+    let size = (2 * max_distance + 1).next_power_of_two();
 
     let mut x = vec![Complex::zero(); size as usize];
 
     x[0] = Complex::one();
-
     for distance in distances {
-        x[distance as usize] = Complex::one()
+        x[*distance as usize] = Complex::one()
     }
 
     return x;
 }
 
-fn rec_fft(input: &Vec<Complex<f64>>, output: &mut Vec<Complex<f64>>, step: u32, start: u32) {
-    let len = input.len();
-    rec_fft(input, output, step * 2, start);
-    rec_fft(input, output, step * 2, start + 1);
+// Custom FFT
+fn rec_fft(samples: &Vec<Complex<f64>>, step: usize, start: usize, sign: &f64) -> Vec<Complex<f64>> {
+    let n = samples.len() / step;
+    if n > 1 {
+        let mut out: Vec<Complex<f64>> = vec![];
+        out.extend(rec_fft(samples, 2*step, start       , sign));
+        out.extend(rec_fft(samples, 2*step, start + step, sign));
+
+        for k in 0..n/2 {
+            let c = Complex::from_polar(&1., &(-2. * (*sign) * PI * (k as f64) / (n as f64)));
+
+            let sample1 = out[k];
+            let sample2 = out[k+n/2];
+
+            out[k]     = sample1 + c * sample2;
+            out[k+n/2] = sample1 - c * sample2;
+        }
+        return out;
+    } else {
+        return vec![samples[start]];
+    }
+}
+fn custom_fft(samples: Vec<Complex<f64>>, inverse: bool) -> Vec<Complex<f64>> {
+    let sign = if inverse { -1. } else { 1. };
+    return rec_fft(&samples, 1, 0, &sign);
 }
 
-fn custom_fft(input: &Vec<Complex<f64>>) -> Vec<Complex<f64>> {
-    let mut output: Vec<Complex<f64>> = vec![Complex::zero(); input.len()];
-    rec_fft(input, &mut output, 1, 0);
-    return output;
-    // let mut planner = FFTplanner::new(inverse);
-    // let fft = planner.plan_fft(input.len());
-    // fft.process(&mut input, &mut output);
-    // output
-}
-
+// Lib FFT
 fn fft(mut input: Vec<Complex<f64>>, inverse: bool) -> Vec<Complex<f64>> {
     let mut output: Vec<Complex<f64>> = input
         .iter()
@@ -79,29 +94,29 @@ fn fft(mut input: Vec<Complex<f64>>, inverse: bool) -> Vec<Complex<f64>> {
     output
 }
 
+// Main
 fn main() {
-    let (
-        distance_to_test,
-        shot_distances
-    ) = read_input();
-    let mut samples = to_samples(shot_distances);
+    let ( distance_to_test, shot_distances ) = read_input();
 
-    // samples = fft(samples, false);
-    println!("{}", samples.len());
-    custom_fft(&samples);
-    return;
-//     samples = samples
-//         .iter()
-//         .map(|c| c * c)
-//         .collect();
-//     samples = fft(samples, true);
-//
-//     println!("Can shoot at {:?}", samples
-//              .iter()
-//              .enumerate()
-//              .map(|(i, x)| if x.re > 0.5 { i as i32 } else { -1 })
-//              .filter(|x| *x != -1)
-//              .collect::<Vec<i32>>());
-//
-//     println!("{} distances to test", distance_to_test.len());
+    println!("{} distances to test", distance_to_test.len());
+
+    // FFT from lib
+    let mut samples = to_samples(&shot_distances);
+    samples = fft(samples, false);
+    samples = samples
+        .iter()
+        .map(|c| c * c)
+        .collect();
+    samples = fft(samples, true);
+    print_shots(samples);
+
+    // Custom FFT
+    let mut custom_samples = to_samples(&shot_distances);
+    custom_samples = custom_fft(custom_samples, false);
+    custom_samples = custom_samples
+        .iter()
+        .map(|c| c * c)
+        .collect();
+    custom_samples = custom_fft(custom_samples, true);
+    print_shots(custom_samples);
 }
